@@ -4,12 +4,12 @@ import pyodbc
 import cx_Oracle
 import keyring
 
-# Caracteres não permitidos no início do nome das tabelas
+# Characters not allowed at the beginning of table names
 caracNaoPermitidos = ["$","#","_"]
-# Indica se as tabelas já existes na origem deverão ser recridas
+# Indicates whether existing tables in the source should be recreated
 recriar=False
 
-# Informe os dados para conexão nas strings abaixo
+# Enter the connection data in the strings below
 sql_server_connection_string = keyring.get_password("sqlserver", "connectionstring")
 oracle_connection_string = keyring.get_password("sqloracle", "connectionstring")
 
@@ -18,11 +18,11 @@ oracle_connection = cx_Oracle.connect(oracle_connection_string)
 
 sql_server_cursor = sql_server_connection.cursor()
 
-# Busca todas as tabelas da base origem (SQL Server) em ordem alfabética
+# Retrieve all tables from the source database (SQL Server) in alphabetical order
 sql_server_cursor.execute("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME")
 tables = sql_server_cursor.fetchall()
 
-# Processa cada uma das tabelas
+# Process each table
 for table in tables:
     table_name = table[0]
     nomeDeTabelaRuim = False
@@ -32,48 +32,48 @@ for table in tables:
         nomeDeTabelaRuim = False
 
     if nomeDeTabelaRuim == False:
-        print(f"Processando tabela {table_name.upper()}...", end='')
+        print(f"Processing table {table_name.upper()}...", end='')
 
-        # Verifica se a tabela já existe na base destino
+        # Check if the table already exists in the destination database
         oracle_cursor = oracle_connection.cursor()
         oracle_cursor.execute(f"SELECT count(*) FROM user_tables WHERE table_name = '{table_name.upper()}'")
         table_exists = oracle_cursor.fetchone()[0] > 0
         oracle_cursor.close()
 
-        # Verifica se a tabela já existe e se será necessário recriá-la
+        # Check if the table already exists and if it needs to be recreated
         if table_exists and recriar :
-            # Seleciona todas as constraints que existam na tabela destino e desabilita para evitar problemas ao dropar a tabela
+            # Select all constraints from the destination table and disable them to avoid problems when dropping the table
             oracle_cursor = oracle_connection.cursor()
             oracle_cursor.execute(f"SELECT constraint_name FROM all_constraints WHERE table_name = '{table_name.upper()}' AND constraint_type = 'R'")
             for constraint_name in oracle_cursor:
                 try:
                     oracle_cursor.execute(f"ALTER TABLE {table_name} DISABLE CONSTRAINT {constraint_name[0]}")
                 except:
-                    print(f"Erro desabilitando constraint {constraint_name[0]}")
+                    print(f"Error disabling constraint {constraint_name[0]}")
                     quit()
 
             oracle_cursor.close()
 
-            # Dropa a tabela no destino
-            print(f" Dropando a tabela, já existente, {table_name.upper()} => DROP TABLE {table_name}...", end='')
+            # Drop the table in the destination database
+            print(f" Dropping existing table {table_name.upper()} => DROP TABLE {table_name}...", end='')
             oracle_cursor = oracle_connection.cursor()
             try:
                 oracle_cursor.execute(f"DROP TABLE {table_name}")
             except:
-                print(f"Erro dropando tabela")
+                print(f"Error dropping table")
                 quit()
 
             oracle_cursor.close()
             oracle_connection.commit()
         else:
             if table_exists:
-                print(f" Pulando, tabela já existente.", end='');
+                print(f" Skipping, table already exists.", end='')
 
-        # Verifica se devemos prosseguir na criação da tabela no destino, e na inclusão dos dados da tabela origem para a tabela destino
+        # Check if we should proceed with creating the table in the destination database and inserting data from the source table
         if table_exists == False or recriar:
             print("")
 
-            # Seleciona as colunas, tipos, tamanhos, se permite nulo, se é primary key etc para montagem do comando de CREATE TABLE no destino
+            # Select columns, types, sizes, whether it allows null, whether it is a primary key, etc. to build the CREATE TABLE command for the destination
             sqlTableSchema = "SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, COLUMN_DEFAULT, COLS.IS_NULLABLE, is_identity, ISNULL(PK.PRIMARYKEY, 0) AS PRIMARYKEY "
             sqlTableSchema = sqlTableSchema + "FROM INFORMATION_SCHEMA.COLUMNS COLS JOIN SYS.columns C ON C.object_id = object_id(COLS.TABLE_NAME) AND C.name = COLUMN_NAME "
             sqlTableSchema = sqlTableSchema + "LEFT JOIN (SELECT table_name AS TABELA, column_name AS COLUNA, 1 AS PRIMARYKEY FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE "
@@ -114,7 +114,7 @@ for table in tables:
                 if is_nullable == 'NO' :
                     complement = complement + " NOT NULL"
 
-                # Faz o de/para dos tipos de dados do SQL Server (origem) para os tipos de dados do Oracle (destino), seus equivalentes mais adequados
+                # Map SQL Server (source) data types to Oracle (destination) data types, using the most appropriate equivalents
                 match data_type:
                     case "image":
                         create_table_query += f"{column_name} long raw{complement},"
@@ -151,7 +151,7 @@ for table in tables:
 
             oracle_cursor = oracle_connection.cursor()
             try:
-                # Executa a criação da tabela no destino
+                # Execute the CREATE TABLE command in the destination
                 oracle_cursor.execute(create_table_query)
             except:
                 print(f"create_table_query = {create_table_query}")
@@ -164,12 +164,13 @@ for table in tables:
 
             oracle_connection.commit()
 
-            # Cria o reader dos dados da tabela origem
+            # Create the reader for the source table data
             sql_server_cursor.execute(f"SELECT * FROM {table_name}")
             rows = sql_server_cursor.fetchall()
 
             for row in rows:
-                # Inicia o comando INSERT para inserir os dados na tabela destino
+
+                # Start the INSERT command to insert the data into the destination table
                 insert_query = f"INSERT INTO {table_name} ("
                 for col in cols:
                     insert_query += col[0] + ","
@@ -189,9 +190,9 @@ for table in tables:
                     # print(f"{cols[i][0]} - type(value): {type(value)} - is_nullable: {is_nullable} - valor: {value} - length: {length}")
                     insert_query += f":{cols[i][0]},"
 
-                    # Trata alguns dados para evitar erros nos casos de coluna não permitir nulo. 
-                    # Por exemplo, no SQL Server uma coluna varchar que não permite nulo, aceita o conteúdo "", 
-                    # o Oracle não permite, é necessário um espaço em branco " "
+                    # Handle some data to avoid errors when the column does not allow NULL.
+                    # For example, in SQL Server a varchar column that does not allow NULL accepts the content "",
+                    # while Oracle does not allow it and requires a whitespace " ".
                     if is_nullable == 'NO' :
                         if value == None:
                             if isinstance(value, (int, float)):
@@ -203,6 +204,7 @@ for table in tables:
                         elif isinstance(value, str):
                             if len(value) == 0:
                                 value = " "
+
                     
                     datas.append(value)
 
@@ -212,7 +214,7 @@ for table in tables:
                 # print(datas)
                 bytesToCommit += sys.getsizeof(datas)
                 try:
-                    # Executa o comando para inserir os dados na tabela destino
+                    # Execute the command to insert the data into the destination table
                     oracle_cursor.execute(insert_query, datas)
                 except:
                     print(f"insert_query = {insert_query}")
@@ -224,15 +226,15 @@ for table in tables:
                     sql_server_connection.close()
                     quit()
 
-                # Para a execução ser mais rápida, mantem em cache de dados até 10MB de dados 
-                # antes de descarregar e efetivas a persistência na base destino.
+                # To speed up execution, keep up to 10MB of data in the cache
+                # before unloading and persisting it in the destination database.
                 if bytesToCommit >= (1024*10):
                     oracle_connection.commit()
                     bytesToCommit = 0
         else:
             print("")
     else:
-        print(f"Ao tentar criar a tabela {table_name}, ocorreu o seguinte erro: \"O nome do identificador começou com um caractere ASCII diferente de uma letra ou número. Após o primeiro caractere do nome do identificador, são permitidos caracteres ASCII, incluindo \"$\", \"#\" e \"_\". Identificadores entre aspas duplas podem conter qualquer caractere, exceto aspas duplas. Aspas de citação alternativas (q'#...#') não podem usar espaços, tabulações ou quebras de linha como delimitadores. Para todos os outros contextos, consulte o Manual de Referência da Linguagem SQL.\"");
+        print(f"When trying to create table {table_name}, the following error occurred: \"The identifier name started with an ASCII character other than a letter or number. After the first character of the identifier name, ASCII characters including \"$\", \"#\", and \"_\" are allowed. Double quotation marks can contain any character except double quotation marks. Alternative quotation marks (q'#...#') cannot use spaces, tabs, or line breaks as delimiters. For all other contexts, see the SQL Language Reference Manual.\"");
 
 oracle_connection.commit()
 oracle_cursor.close()

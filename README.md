@@ -35,5 +35,5 @@ Siga os passos abaixo:
       ```
       ** Este passo irá criar as tabelas no destino e popular com os mesmos dados da base origem. **
 
-Ainda não foi desenvolvido a criação de constraintsde relacionamento.
+Ainda não foi desenvolvido a criação de constraints de relacionamento.
 

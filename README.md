@@ -1,5 +1,5 @@
 
-# MigrationSQLServerToOracle
+# Migration SQL Server To Oracle
 
 Follow the steps below:
   - Edit the setpass.py script with the connection data for the SQL Server and Oracle databases involved.
@@ -19,7 +19,7 @@ The creation of relationship constraints has not been developed yet.
 
 -------------------------------------------------------------------------------------------------------------------------------------------------
 
-# MigrationSQLServerToOracle
+# Migration SQL Server To Oracle
 
 Siga os passos abaixo:
   - Edite o script setpass.py com os dados das conexões dos bancos de dados SQL Server e Oracle envolvidos
